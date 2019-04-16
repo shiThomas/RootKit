@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 void copy_File(const char *input, const char *output) {
-  char buffer[40000];
+  char buffer[50000];
   long numbytes;
   FILE *ifp, *ofp;
 
@@ -18,7 +18,7 @@ void copy_File(const char *input, const char *output) {
   fseek(ifp, 0L, SEEK_END);
   numbytes = ftell(ifp);
   fseek(ifp, 0L, SEEK_SET);
-
+  //  printf("numbytes: %d\n", numbytes);
   size_t len = fread(buffer, sizeof(char), numbytes, ifp);
   buffer[len] = '\0';
   fclose(ifp);

